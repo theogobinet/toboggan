@@ -29,10 +29,8 @@ class KubeCheckAction(BaseAction):
 
         try:
             reader = TokenReader(token)
-            api_server = reader.iss
             subject = reader.sub
             logger.info(f"Authenticated as: {subject}")
-            logger.info(f"Kubernetes API server: {api_server}")
         except Exception as exc:
             logger.error(f"Failed to parse the Kubernetes token: {exc}")
             return
@@ -70,8 +68,24 @@ class KubeCheckAction(BaseAction):
                     "Same /etc/passwd inside and outside — likely no escape or already on host."
                 )
 
+        api_server = self._executor.remote_execute(
+            'if [ -n "$KUBERNETES_SERVICE_HOST" ] && '
+            '[ -n "$KUBERNETES_SERVICE_PORT" ]; then '
+            'printf "https://%s:%s" "$KUBERNETES_SERVICE_HOST" '
+            '"$KUBERNETES_SERVICE_PORT"; fi'
+        ).strip()
+        if not api_server:
+            logger.warning("Kubernetes API server environment variables not found.")
+            return
+        logger.info(f"Kubernetes API server: {api_server}")
+
+        curl_path = self._executor.os_helper.get_command_location("curl")
+        if not curl_path:
+            logger.warning("No usable curl binary found.")
+            return
+
         # Base curl command
-        curl_base = f"curl -sS --cacert {cert_path} -H 'Authorization: Bearer {token}'"
+        curl_base = f"{curl_path} -sS --cacert {cert_path} -H 'Authorization: Bearer {token}'"
 
         namespace = (
             self._executor.remote_execute(f"cat {namespace_path}").strip() or "default"
@@ -142,7 +156,7 @@ class KubeCheckAction(BaseAction):
         ).strip()
 
         if node_ip:
-            kubelet_cmd = f"curl -sk https://{node_ip}:10250/pods"
+            kubelet_cmd = f"{curl_path} -sk https://{node_ip}:10250/pods"
             result = self._executor.remote_execute(kubelet_cmd, timeout=5)
             if result:
                 logger.success(f"Kubelet at {node_ip}:10250 responded.")
