@@ -1,4 +1,5 @@
 import json
+from ipaddress import IPv4Address
 
 # External library imports
 from loguru import logger
@@ -150,22 +151,29 @@ class KubeCheckAction(BaseAction):
                 except Exception:
                     logger.warning(f"Failed to parse {resource} list response.")
 
-        logger.info("Probing kubelet (port 10250)")
-        node_ip = self._executor.remote_execute(
-            "ip route get 1 | awk '{print $NF; exit}'"
-        ).strip()
+        ip_path = self._executor.os_helper.get_command_location("ip")
+        if not ip_path:
+            logger.warning("ip command not found; skipping kubelet probe.")
+            return
 
-        if node_ip:
-            kubelet_cmd = f"{curl_path} -sk https://{node_ip}:10250/pods"
-            result = self._executor.remote_execute(kubelet_cmd, timeout=5)
-            if result:
-                logger.success(f"Kubelet at {node_ip}:10250 responded.")
-                try:
-                    print(json.dumps(json.loads(result), indent=4))
-                except Exception:
-                    print(result)
-            else:
-                logger.warning("No response from kubelet.")
+        route_parts = self._executor.remote_execute(f"{ip_path} route get 1").split()
+        try:
+            node_ip = str(IPv4Address(route_parts[route_parts.index("src") + 1]))
+        except (ValueError, IndexError):
+            logger.warning("Could not determine a valid IP from the route; skipping kubelet probe.")
+            return
+
+        logger.info("Probing kubelet (port 10250)")
+        kubelet_cmd = f"{curl_path} -sk https://{node_ip}:10250/pods"
+        result = self._executor.remote_execute(kubelet_cmd, timeout=5)
+        if result:
+            logger.success(f"Kubelet at {node_ip}:10250 responded.")
+            try:
+                print(json.dumps(json.loads(result), indent=4))
+            except Exception:
+                print(result)
+        else:
+            logger.warning("No response from kubelet.")
 
     def _analyze_rules(self, ssrr_json: dict) -> None:
         """
