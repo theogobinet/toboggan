@@ -135,8 +135,8 @@ class KubeCheckAction(BaseAction):
                     if not pod_uid or metadata.get("uid") == pod_uid:
                         current_pod = pod
         elif isinstance(pods_json, dict) and pods_json.get("kind") == "Status":
-            logger.info(
-                "Listing namespace pods: "
+            logger.warning(
+                "Could not list namespace pods: "
                 f"{pods_json.get('reason', pods_json.get('status', 'unknown'))}"
             )
 
@@ -155,11 +155,12 @@ class KubeCheckAction(BaseAction):
                     metadata = pod_json.get("metadata", {})
                     if not pod_uid or metadata.get("uid") == pod_uid:
                         current_pod = pod_json
+                        logger.success("Read current Pod via Kubernetes API.")
                     else:
                         logger.warning("Pod UID does not match the token claim.")
                 elif isinstance(pod_json, dict):
-                    logger.info(
-                        f"Reading current Pod: {pod_json.get('reason', 'unavailable')}"
+                    logger.warning(
+                        f"Could not read current Pod: {pod_json.get('reason', 'unavailable')}"
                     )
 
         if current_pod:
@@ -204,11 +205,15 @@ class KubeCheckAction(BaseAction):
         for rule in status.get("resourceRules", []):
             verbs = rule.get("verbs", [])
             groups = rule.get("apiGroups", [])
+            group_names = ", ".join(group or "core" for group in groups) or "unknown"
+            names = rule.get("resourceNames", [])
+            name_scope = f"; names: {', '.join(names)}" if names else ""
             for resource in rule.get("resources", []):
                 if resource in interesting or resource == "*":
                     found = True
                     logger.info(
-                        f"Permission {','.join(groups) or 'core'}/{resource}: "
+                        f"Permission {resource} (API groups: {group_names}"
+                        f"{name_scope}): "
                         f"{', '.join(verbs)}"
                     )
         if not found:
