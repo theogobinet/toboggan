@@ -7,7 +7,10 @@ from typing import BinaryIO
 from loguru import logger
 
 
-def validate_chunk_size(size: int) -> int:
+def validate_chunk_size(size: int | str) -> int:
+    # The interactive terminal passes action arguments as strings.
+    if isinstance(size, str) and re.fullmatch(r"[0-9]+", size):
+        size = int(size)
     if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
         raise ValueError("Download chunk size must be a positive integer.")
     return size

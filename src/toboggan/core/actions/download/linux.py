@@ -37,9 +37,8 @@ class DownloadAction(BaseAction):
         """
 
         try:
-            command_size = validate_chunk_size(
-                self._executor.command_max_size if command_size is None else command_size
-            )
+            if command_size is not None:
+                command_size = validate_chunk_size(command_size)
         except ValueError as exc:
             logger.error(str(exc))
             return False
@@ -54,6 +53,13 @@ class DownloadAction(BaseAction):
             return False
 
         logger.info(f"File is accessible: {remote_path}")
+
+        if command_size is None:
+            try:
+                command_size = self._executor.ensure_command_max_size()
+            except Exception as exc:
+                logger.error(f"Cannot determine download chunk size: {exc}")
+                return False
 
         # Determine final local path
         if local_path is None:

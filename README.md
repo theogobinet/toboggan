@@ -241,6 +241,9 @@ toboggan ~/phpexploit.py --obfuscate --fifo --os "linux"
 Actions are modular plugins executed via the `!` prefix inside the terminal session. Use `!help` to list all available actions.
 
 Downloads use the current `!size` / `!cmdsize` setting as their initial chunk size.
+If no size has been configured, the first download automatically runs the size
+probe and caches its result for the session. A failed probe stops the download;
+you can set `!size` manually or supply a per-download override.
 The optional third argument to `!download remote_path local_path 32768` overrides
 it for one transfer (`command_size` is retained as the argument name).
 Short responses reduce the chunk size and retry the same offset; missing or
